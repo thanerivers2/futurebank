@@ -3,300 +3,336 @@
 <head>
 <meta charset="UTF-8">
 <title>FutureBank Demo</title>
+
 <style>
-body{
-margin:0;
-font-family:Segoe UI,Arial;
-background:#f2f4f8;
-}
-
-.header{
-background:#1e3c72;
-color:white;
-padding:18px;
-font-size:20px;
-font-weight:bold;
-}
-
-.container{
-padding:20px;
-max-width:480px;
-margin:auto;
-}
-
-.card{
-background:white;
-padding:18px;
-border-radius:14px;
-margin-bottom:15px;
-box-shadow:0 4px 12px rgba(0,0,0,0.08);
-}
-
-.balance{
-background:linear-gradient(135deg,#1e3c72,#2a5298);
-color:white;
-}
-
-button{
-padding:10px;
-width:100%;
-border:none;
-border-radius:8px;
-margin-top:8px;
-background:#1e88e5;
-color:white;
-cursor:pointer;
-}
-
-input{
-padding:10px;
-width:100%;
-margin:6px 0;
-border-radius:8px;
-border:1px solid #ccc;
-}
-
-.tx{
-font-size:13px;
-border-bottom:1px solid #ddd;
-padding:6px 0;
-}
-
+body{margin:0;font-family:Segoe UI,Arial;background:#f4f6f9;}
+.header{background:#0a3d62;color:white;padding:18px;font-size:20px;font-weight:bold;}
+.container{max-width:1100px;margin:30px auto;background:white;padding:25px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+input{padding:10px;margin:6px 0;width:100%;border:1px solid #ccc;border-radius:6px;}
+button{padding:8px 14px;border:none;border-radius:6px;background:#0a3d62;color:white;cursor:pointer;margin:4px 2px;}
+button:hover{background:#074173;}
+.card{background:#eef2f7;padding:15px;margin:10px 0;border-radius:8px;}
 .hidden{display:none;}
+.success{color:green;}
+.error{color:red;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+.stat{background:#dfe6f1;padding:15px;border-radius:8px;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}
+th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left;}
+.frozen{color:red;font-weight:bold;}
 </style>
 </head>
-<body>
 
-<div id="loginPage" class="container">
-<h2>FutureBank Demo Login</h2>
-<input id="loginUser" placeholder="Username">
-<input id="loginPass" type="password" placeholder="Password">
+<body>
+<div class="header">FutureBank Demo</div>
+<div class="container">
+
+<div id="loginSection">
+<h2>Login</h2>
+<input id="username" placeholder="Username">
+<input id="password" type="password" placeholder="Password">
 <button onclick="login()">Login</button>
-<p id="msg"></p>
+<p id="loginMsg"></p>
 </div>
 
-<div id="app" class="hidden">
-<div class="header" id="topBar"></div>
-<div class="container" id="content"></div>
+<div id="adminSection" class="hidden">
+<h2>Admin Dashboard</h2>
+<button onclick="logout()">Logout</button>
+
+<div class="grid">
+<div class="stat">Total Users: <span id="totalUsers"></span></div>
+<div class="stat">Total Bank Balance: $<span id="totalBalance"></span></div>
+</div>
+
+<div class="card">
+<h3>Create User</h3>
+<input id="newUser" placeholder="Username">
+<input id="newPass" placeholder="Password">
+<input id="newName" placeholder="Full Name">
+<button onclick="createUser()">Create</button>
+<p id="createMsg"></p>
+</div>
+
+<div class="card">
+<h3>All Users</h3>
+<div id="userList"></div>
+</div>
+</div>
+
+<div id="userSection" class="hidden">
+<h2>User Dashboard</h2>
+<button onclick="logout()">Logout</button>
+
+<div class="card">
+<p><strong>Name:</strong> <span id="uName"></span></p>
+<p><strong>Account Number:</strong> <span id="uAcc"></span></p>
+<p><strong>Status:</strong> <span id="uStatus"></span></p>
+<p><strong>Balance:</strong> $<span id="uBal"></span></p>
+</div>
+
+<div class="card">
+<h3>Send Money</h3>
+<input id="sendTo" placeholder="Recipient Account Number">
+<input id="sendAmt" type="number" placeholder="Amount">
+<button onclick="sendMoney()">Send</button>
+<p id="sendMsg"></p>
+</div>
+
+<div class="card">
+<h3>Transaction History</h3>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Type</th>
+<th>Amount</th>
+<th>Reference</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody id="historyTable"></tbody>
+</table>
+</div>
+
+</div>
 </div>
 
 <script>
-const STORAGE_KEY="futurebank_demo_v2";
+const STORAGE_KEY="futurebank_clean_v1";
 
-let bank=JSON.parse(localStorage.getItem(STORAGE_KEY));
+function getData(){
+return JSON.parse(localStorage.getItem(STORAGE_KEY));
+}
 
-if(!bank){
-bank={
+function saveData(data){
+localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+}
+
+function init(){
+let data=getData();
+if(!data){
+data={
 users:{
 admin:{
 password:"admin123",
-name:"Bank Admin",
 role:"admin",
-balance:0,
+name:"System Admin",
 account:"0000000000",
+balance:0,
+status:"active",
 history:[]
 }
-},
-counter:1000000001
+}
 };
-localStorage.setItem(STORAGE_KEY,JSON.stringify(bank));
+saveData(data);
 }
-
-let current=null;
-
-function save(){
-localStorage.setItem(STORAGE_KEY,JSON.stringify(bank));
 }
+init();
+
+let currentUser=null;
 
 function login(){
-let u=loginUser.value.trim();
-let p=loginPass.value.trim();
+let u=document.getElementById("username").value.trim();
+let p=document.getElementById("password").value.trim();
+let data=getData();
 
-if(!bank.users[u] || bank.users[u].password!==p){
-msg.innerText="Invalid login";
-return;
+if(data.users[u] && data.users[u].password===p){
+if(data.users[u].role==="admin"){
+document.getElementById("loginSection").classList.add("hidden");
+document.getElementById("adminSection").classList.remove("hidden");
+loadAdmin();
+}else{
+currentUser=u;
+loadUser();
 }
-
-current=u;
-loginPage.classList.add("hidden");
-app.classList.remove("hidden");
-loadDashboard();
+}else{
+document.getElementById("loginMsg").innerHTML="<span class='error'>Invalid login</span>";
+}
 }
 
 function logout(){
 location.reload();
 }
 
-function loadDashboard(){
-let user=bank.users[current];
-topBar.innerText="Welcome, "+user.name;
-
-if(user.role==="admin"){
-loadAdmin();
-}else{
-loadUser();
-}
-}
-
-function loadAdmin(){
-content.innerHTML=`
-<div class="card balance">
-<h3>Admin Dashboard</h3>
-<p>Total Users: ${Object.keys(bank.users).length-1}</p>
-</div>
-
-<div class="card">
-<h4>Create User</h4>
-<input id="nName" placeholder="Full Name">
-<input id="nUser" placeholder="Username">
-<input id="nPass" placeholder="Password">
-<button onclick="createUser()">Create User</button>
-</div>
-
-<div class="card">
-<h4>Deposit</h4>
-<input id="dAcc" placeholder="Account Number">
-<input id="dAmt" placeholder="Amount">
-<button onclick="deposit()">Deposit</button>
-</div>
-
-<div class="card">
-<h4>All Transactions</h4>
-${bank.users.admin.history.map(t=><div class="tx">${t}</div>).join("")}
-</div>
-
-<button onclick="logout()">Logout</button>
-`;
-}
-
-function loadUser(){
-let user=bank.users[current];
-
-content.innerHTML=`
-<div class="card balance">
-<h2>$${user.balance}</h2>
-<p>${user.name}</p>
-<p>Acc: ${user.account}</p>
-</div>
-
-<div class="card">
-<h4>Send</h4>
-<input id="sAcc" placeholder="Receiver Account">
-<input id="sAmt" placeholder="Amount">
-<button onclick="send()">Send</button>
-</div>
-
-<div class="card">
-<h4>Withdraw</h4>
-<input id="wAmt" placeholder="Amount">
-<button onclick="withdraw()">Withdraw</button>
-</div>
-
-<div class="card">
-<h4>Transactions</h4>
-${user.history.map(t=><div class="tx">${t}</div>).join("")}
-</div>
-
-<button onclick="logout()">Logout</button>
-`;
-}
-
 function createUser(){
-let name=nName.value.trim();
-let uname=nUser.value.trim();
-let pass=nPass.value.trim();
+let data=getData();
+let u=newUser.value.trim();
+if(!u || !newPass.value || !newName.value){
+createMsg.innerHTML="<span class='error'>All fields required</span>";
+return;
+}
 
-if(bank.users[uname]){alert("Username exists");return;}
+if(data.users[u]){
+createMsg.innerHTML="<span class='error'>User exists</span>";
+return;
+}
 
-let acc=(bank.counter++).toString();
+let acc=Math.floor(1000000000+Math.random()*9000000000);
 
-bank.users[uname]={
-password:pass,
-name:name,
+data.users[u]={
+password:newPass.value,
 role:"user",
+name:newName.value,
+account:String(acc),
 balance:0,
-account:acc,
+status:"active",
 history:[]
 };
 
-save();
-alert("User created\nAccount: "+acc);
+saveData(data);
+createMsg.innerHTML="<span class='success'>User created</span>";
 loadAdmin();
 }
 
-function deposit(){
-let acc=dAcc.value.trim();
-let amt=parseInt(dAmt.value);
+function loadAdmin(){
+let data=getData();
+let html="";
+let totalBal=0;
+let count=0;
 
-let u=findAcc(acc);
-if(!u){alert("Account not found");return;}
+for(let u in data.users){
+if(data.users[u].role==="user"){
+count++;
+totalBal+=data.users[u].balance;
 
-bank.users[u].balance+=amt;
+html+=`
+<div class='card'>
+<strong>${data.users[u].name}</strong><br>
+Account: ${data.users[u].account}<br>
+Balance: $${data.users[u].balance}<br>
+Status: ${data.users[u].status}<br>
+<button onclick="deposit('${u}')">Deposit</button>
+<button onclick="toggleFreeze('${u}')">Freeze/Unfreeze</button>
+<button onclick="deleteUser('${u}')">Delete</button>
+</div>`;
+}
+}
 
-let ref=refGen();
-let record=time()+" | Deposit $"+amt+" | Ref:"+ref;
+userList.innerHTML=html;
+totalUsers.innerText=count;
+totalBalance.innerText=totalBal;
+}
 
-bank.users[u].history.push(record);
-bank.users.admin.history.push(record);
+function deposit(u){
+let amt=prompt("Enter deposit amount:");
+amt=parseFloat(amt);
+if(!amt || amt<=0)return;
 
-save();
+let data=getData();
+data.users[u].balance+=amt;
+
+data.users[u].history.push({
+date:new Date().toLocaleString(),
+type:"Credit",
+amount:amt,
+ref:generateRef(),
+details:"Admin Deposit"
+});
+
+saveData(data);
 loadAdmin();
 }
 
-function send(){
-let acc=sAcc.value.trim();
-let amt=parseInt(sAmt.value);
-let sender=bank.users[current];
-let receiver=findAcc(acc);
+function toggleFreeze(u){
+let data=getData();
+data.users[u].status=data.users[u].status==="active"?"frozen":"active";
+saveData(data);
+loadAdmin();
+}
 
-if(!receiver){alert("Account not found");return;}
-if(sender.balance<amt){alert("Insufficient funds");return;}
+function deleteUser(u){
+let data=getData();
+delete data.users[u];
+saveData(data);
+loadAdmin();
+}
+
+function loadUser(){
+document.getElementById("loginSection").classList.add("hidden");
+document.getElementById("userSection").classList.remove("hidden");
+
+let data=getData();
+let user=data.users[currentUser];
+
+uName.innerText=user.name;
+uAcc.innerText=user.account;
+uBal.innerText=user.balance;
+uStatus.innerHTML=user.status==="frozen"?"<span class='frozen'>Frozen</span>":"Active";
+
+loadHistory();
+}
+
+function loadHistory(){
+let data=getData();
+let user=data.users[currentUser];
+let html="";
+
+user.history.forEach(t=>{
+html+=`
+<tr>
+<td>${t.date}</td>
+<td>${t.type}</td>
+<td>$${t.amount}</td>
+<td>${t.ref}</td>
+<td>${t.details}</td>
+</tr>`;
+});
+
+historyTable.innerHTML=html;
+}
+
+function generateRef(){
+return "FB"+Math.floor(Math.random()*1000000000);
+}
+
+function sendMoney(){
+let data=getData();
+let sender=data.users[currentUser];
+
+if(sender.status==="frozen"){
+sendMsg.innerHTML="<span class='error'>Account Frozen</span>";
+return;
+}
+
+let to=sendTo.value.trim();
+let amt=parseFloat(sendAmt.value);
+
+if(!amt || amt<=0){
+sendMsg.innerHTML="<span class='error'>Invalid amount</span>";
+return;
+}
+
+let recipient=null;
+for(let u in data.users){
+if(data.users[u].account===to){
+recipient=data.users[u];
+break;
+}
+}
+
+if(!recipient){
+sendMsg.innerHTML="<span class='error'>Account not found</span>";
+return;
+}
+
+if(sender.balance<amt){
+sendMsg.innerHTML="<span class='error'>Insufficient balance</span>";
+return;
+}
 
 sender.balance-=amt;
-bank.users[receiver].balance+=amt;
+recipient.balance+=amt;
 
-let ref=refGen();
-let record=time()+" | Sent $"+amt+" | Ref:"+ref;
+let ref=generateRef();
+let date=new Date().toLocaleString();
 
-sender.history.push(record);
-bank.users[receiver].history.push(record);
-bank.users.admin.history.push(record);
+sender.history.push({date,type:"Debit",amount:amt,ref,details:"Sent to "+recipient.name});
+recipient.history.push({date,type:"Credit",amount:amt,ref,details:"Received from "+sender.name});
 
-save();
+saveData(data);
 loadUser();
-}
 
-function withdraw(){
-let amt=parseInt(wAmt.value);
-let user=bank.users[current];
-
-if(user.balance<amt){alert("Insufficient funds");return;}
-
-user.balance-=amt;
-
-let ref=refGen();
-let record=time()+" | Withdraw $"+amt+" | Ref:"+ref;
-
-user.history.push(record);
-bank.users.admin.history.push(record);
-
-save();
-loadUser();
-}
-
-function findAcc(acc){
-for(let u in bank.users){
-if(bank.users[u].account===acc){return u;}
-}
-return null;
-}
-
-function refGen(){
-return "TX"+Math.floor(Math.random()*1000000);
-}
-
-function time(){
-return new Date().toLocaleString();
+sendMsg.innerHTML="<span class='success'>Transfer successful</span>";
 }
 </script>
 
