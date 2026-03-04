@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>FutureBank Demo</title>
+<style>
+body{
+margin:0;
+font-family:Segoe UI,Arial;
+background:#f2f4f8;
+}
+
+.header{
+background:#1e3c72;
+color:white;
+padding:18px;
+font-size:20px;
+font-weight:bold;
+}
+
+.container{
+padding:20px;
+max-width:480px;
+margin:auto;
+}
+
+.card{
+background:white;
+padding:18px;
+border-radius:14px;
+margin-bottom:15px;
+box-shadow:0 4px 12px rgba(0,0,0,0.08);
+}
+
+.balance{
+background:linear-gradient(135deg,#1e3c72,#2a5298);
+color:white;
+}
+
+button{
+padding:10px;
+width:100%;
+border:none;
+border-radius:8px;
+margin-top:8px;
+background:#1e88e5;
+color:white;
+cursor:pointer;
+}
+
+input{
+padding:10px;
+width:100%;
+margin:6px 0;
+border-radius:8px;
+border:1px solid #ccc;
+}
+
+.tx{
+font-size:13px;
+border-bottom:1px solid #ddd;
+padding:6px 0;
+}
+
+.hidden{display:none;}
+</style>
+</head>
+<body>
+
+<div id="loginPage" class="container">
+<h2>FutureBank Demo Login</h2>
+<input id="loginUser" placeholder="Username">
+<input id="loginPass" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<p id="msg"></p>
+</div>
+
+<div id="app" class="hidden">
+<div class="header" id="topBar"></div>
+<div class="container" id="content"></div>
+</div>
+
+<script>
+const STORAGE_KEY="futurebank_demo_v2";
+
+let bank=JSON.parse(localStorage.getItem(STORAGE_KEY));
+
+if(!bank){
+bank={
+users:{
+admin:{
+password:"admin123",
+name:"Bank Admin",
+role:"admin",
+balance:0,
+account:"0000000000",
+history:[]
+}
+},
+counter:1000000001
+};
+localStorage.setItem(STORAGE_KEY,JSON.stringify(bank));
+}
+
+let current=null;
+
+function save(){
+localStorage.setItem(STORAGE_KEY,JSON.stringify(bank));
+}
+
+function login(){
+let u=loginUser.value.trim();
+let p=loginPass.value.trim();
+
+if(!bank.users[u] || bank.users[u].password!==p){
+msg.innerText="Invalid login";
+return;
+}
+
+current=u;
+loginPage.classList.add("hidden");
+app.classList.remove("hidden");
+loadDashboard();
+}
+
+function logout(){
+location.reload();
+}
+
+function loadDashboard(){
+let user=bank.users[current];
+topBar.innerText="Welcome, "+user.name;
+
+if(user.role==="admin"){
+loadAdmin();
+}else{
+loadUser();
+}
+}
+
+function loadAdmin(){
+content.innerHTML=`
+<div class="card balance">
+<h3>Admin Dashboard</h3>
+<p>Total Users: ${Object.keys(bank.users).length-1}</p>
+</div>
+
+<div class="card">
+<h4>Create User</h4>
+<input id="nName" placeholder="Full Name">
+<input id="nUser" placeholder="Username">
+<input id="nPass" placeholder="Password">
+<button onclick="createUser()">Create User</button>
+</div>
+
+<div class="card">
+<h4>Deposit</h4>
+<input id="dAcc" placeholder="Account Number">
+<input id="dAmt" placeholder="Amount">
+<button onclick="deposit()">Deposit</button>
+</div>
+
+<div class="card">
+<h4>All Transactions</h4>
+${bank.users.admin.history.map(t=><div class="tx">${t}</div>).join("")}
+</div>
+
+<button onclick="logout()">Logout</button>
+`;
+}
+
+function loadUser(){
+let user=bank.users[current];
+
+content.innerHTML=`
+<div class="card balance">
+<h2>$${user.balance}</h2>
+<p>${user.name}</p>
+<p>Acc: ${user.account}</p>
+</div>
+
+<div class="card">
+<h4>Send</h4>
+<input id="sAcc" placeholder="Receiver Account">
+<input id="sAmt" placeholder="Amount">
+<button onclick="send()">Send</button>
+</div>
+
+<div class="card">
+<h4>Withdraw</h4>
+<input id="wAmt" placeholder="Amount">
+<button onclick="withdraw()">Withdraw</button>
+</div>
+
+<div class="card">
+<h4>Transactions</h4>
+${user.history.map(t=><div class="tx">${t}</div>).join("")}
+</div>
+
+<button onclick="logout()">Logout</button>
+`;
+}
+
+function createUser(){
+let name=nName.value.trim();
+let uname=nUser.value.trim();
+let pass=nPass.value.trim();
+
+if(bank.users[uname]){alert("Username exists");return;}
+
+let acc=(bank.counter++).toString();
+
+bank.users[uname]={
+password:pass,
+name:name,
+role:"user",
+balance:0,
+account:acc,
+history:[]
+};
+
+save();
+alert("User created\nAccount: "+acc);
+loadAdmin();
+}
+
+function deposit(){
+let acc=dAcc.value.trim();
+let amt=parseInt(dAmt.value);
+
+let u=findAcc(acc);
+if(!u){alert("Account not found");return;}
+
+bank.users[u].balance+=amt;
+
+let ref=refGen();
+let record=time()+" | Deposit $"+amt+" | Ref:"+ref;
+
+bank.users[u].history.push(record);
+bank.users.admin.history.push(record);
+
+save();
+loadAdmin();
+}
+
+function send(){
+let acc=sAcc.value.trim();
+let amt=parseInt(sAmt.value);
+let sender=bank.users[current];
+let receiver=findAcc(acc);
+
+if(!receiver){alert("Account not found");return;}
+if(sender.balance<amt){alert("Insufficient funds");return;}
+
+sender.balance-=amt;
+bank.users[receiver].balance+=amt;
+
+let ref=refGen();
+let record=time()+" | Sent $"+amt+" | Ref:"+ref;
+
+sender.history.push(record);
+bank.users[receiver].history.push(record);
+bank.users.admin.history.push(record);
+
+save();
+loadUser();
+}
+
+function withdraw(){
+let amt=parseInt(wAmt.value);
+let user=bank.users[current];
+
+if(user.balance<amt){alert("Insufficient funds");return;}
+
+user.balance-=amt;
+
+let ref=refGen();
+let record=time()+" | Withdraw $"+amt+" | Ref:"+ref;
+
+user.history.push(record);
+bank.users.admin.history.push(record);
+
+save();
+loadUser();
+}
+
+function findAcc(acc){
+for(let u in bank.users){
+if(bank.users[u].account===acc){return u;}
+}
+return null;
+}
+
+function refGen(){
+return "TX"+Math.floor(Math.random()*1000000);
+}
+
+function time(){
+return new Date().toLocaleString();
+}
+</script>
+
+</body>
+</html>
